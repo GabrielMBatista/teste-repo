@@ -18,10 +18,10 @@ const envVars = [
 ];
 
 function formHTML() {
-  return `<html><body><form method="POST">
-  ${envVars.map(v => `<label>${v} <input type="text" name="${v}"></label><br>`).join('\n')}
-  <button type="submit">Salvar</button>
-</form></body></html>`;
+  return `<form method="POST">
+${envVars.map(v => `<label>${v} <input type="text" name="${v}"></label><br>`).join('\n')}
+<button type="submit">Salvar</button>
+</form>`;
 }
 
 const server = http.createServer((req, res) => {
