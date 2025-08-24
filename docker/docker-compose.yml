@@ -1,0 +1,50 @@
+version: "3.8"
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    ports:
+      - "5678:5678"
+    environment:
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - N8N_DEFAULT_BINARY_DATA_MODE=filesystem
+    volumes:
+      - ./data/n8n:/data
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - ./data/minio:/data
+
+  baserow:
+    image: baserow/baserow:latest
+    ports:
+      - "85:80"
+    environment:
+      - BASEROW_PUBLIC_URL=${BASEROW_PUBLIC_URL}
+    volumes:
+      - ./data/baserow:/baserow/data
+
+  nca-toolkit:
+    image: ncatoolkit/nca-toolkit:latest
+    ports:
+      - "8080:8080"
+    environment:
+      API_KEY: ${API_KEY}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME}
+      S3_REGION: ${S3_REGION}
+
+  kokoro-tts:
+    image: ghcr.io/stv0g/kokoro:gpu
+    # image: ghcr.io/stv0g/kokoro:cpu  # Use this line for CPU-only environments
+    ports:
+      - "8880:8880"

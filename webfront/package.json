@@ -1,0 +1,13 @@
+{
+  "name": "webfront",
+  "version": "1.0.0",
+  "description": "Simple form for configuring environment variables",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs"
+}
