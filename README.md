@@ -28,7 +28,9 @@ docker compose up -d
 - No Baserow (http://localhost:85), importe `../baserow/tabelas-iniciais.csv` para criar as tabelas iniciais.
 
 ## Requisitos de hardware
-Para melhor desempenho recomenda-se pelo menos 4 GB de RAM. O serviço `kokoro-tts` utiliza uma imagem GPU por padrão; caso não possua GPU, altere para a imagem de CPU mencionada no `docker-compose`.
+Para executar os serviços com folga, recomenda-se um processador com PassMark ≥ 3 000, 16 GB de RAM em dual-channel e armazenamento em SSD (NVMe ou SATA).
+Um Core i3 antigo com 16 GB consegue rodar a stack, mas modelos como i3-8100 ou i3-10100 oferecem melhor desempenho.
+O serviço `kokoro-tts` utiliza uma imagem GPU por padrão; caso não possua GPU, altere para a imagem de CPU mencionada no `docker-compose`.
 
 ## Licença
 Distribuído sob a licença MIT. Veja `LICENSE` para mais detalhes.
