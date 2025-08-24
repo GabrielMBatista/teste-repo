@@ -19,7 +19,7 @@ const envVars = [
 
 function formHTML() {
   return `<html><body><form method="POST">
-  ${envVars.map(v => `${v}: <input name="${v}"/><br/>`).join('\n')}
+  ${envVars.map(v => `<label>${v} <input type="text" name="${v}"></label><br>`).join('\n')}
   <button type="submit">Salvar</button>
 </form></body></html>`;
 }
