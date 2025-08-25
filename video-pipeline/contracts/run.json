@@ -1,0 +1,27 @@
+{
+  "metadata": {
+    "title": "Sapo Pizzaiolo",
+    "durationSec": 60,
+    "accountSlug": "conta-principal",
+    "style": "Cartoon flat, bold outline",
+    "language": "pt-BR",
+    "topic": "Faça um roteiro divertido sobre um sapo realista pizzaiolo"
+  },
+  "providers": {
+    "llm": "openai",
+    "tts": "kokoro",
+    "image": "together",
+    "video": "nca",
+    "storage": "baserow"
+  },
+  "steps": [
+    { "id": "script.generate", "input": "metadata.topic", "out": "script.json" },
+    { "id": "prompts.from_script", "in": "script.json", "out": "prompts.json" },
+    { "id": "image.generate_batch", "in": "prompts.json", "out": "images.json" },
+    { "id": "audio.tts", "in": "script.json", "out": "tts.mp3" },
+    { "id": "video.from_images", "in": ["images.json", "tts.mp3"], "out": "video_raw.mp4" },
+    { "id": "caption.segment", "in": "script.json", "out": "segments.json" },
+    { "id": "caption.burn", "in": ["video_raw.mp4", "segments.json"], "out": "video_final.mp4" },
+    { "id": "persistence.save", "in": ["script.json", "prompts.json", "images.json", "tts.mp3", "video_final.mp4"] }
+  ]
+}

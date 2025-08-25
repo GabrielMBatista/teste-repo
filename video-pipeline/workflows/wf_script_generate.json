@@ -1,0 +1,58 @@
+cat > video-pipeline/workflows/wf_script_generate.json <<'EOF'
+{
+  "name": "wf_script_generate",
+  "nodes": [
+    { "parameters": {}, "id": "Start", "name": "Start", "type": "n8n-nodes-base.start", "typeVersion": 1, "position": [200, 200] },
+    {
+      "parameters": {
+        "functionCode": "const { providerKey, providerConfig, topic, scriptPrompt } = items[0].json;\nlet url, headers, body;\nif (providerConfig.type === 'openai.chat') {\n  url = `${providerConfig.baseUrl}/chat/completions`;\n  headers = { Authorization: `Bearer ${$env[providerConfig.apiKeyEnv]}`, 'Content-Type': 'application/json' };\n  body = { model: providerConfig.model, messages: [ { role: 'system', content: scriptPrompt.system }, { role: 'user', content: JSON.stringify({ topic, schema: scriptPrompt.schema }) } ], temperature: 0.7 };\n} else if (providerConfig.type === 'google.gemini') {\n  url = `${providerConfig.baseUrl}/v1/models/${providerConfig.model}:generateContent?key=${$env[providerConfig.apiKeyEnv]}`;\n  headers = { 'Content-Type': 'application/json' };\n  body = { contents: [ { role: 'user', parts: [ { text: `${scriptPrompt.system}\\n\\n${JSON.stringify({ topic, schema: scriptPrompt.schema })}` } ] } ] };\n} else {\n  throw new Error('LLM provider não suportado');\n}\nreturn [{ json: { url, headers, body, providerConfig } }];"
+      },
+      "id": "BuildReq",
+      "name": "Build Request",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [420, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{$json[\"url\"]}}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParametersUi": { "parameter": [ { "name": "Authorization", "value": "={{$json[\"headers\"][\"Authorization\"]}}"}, { "name": "Content-Type", "value": "={{$json[\"headers\"][\"Content-Type\"] || 'application/json'}}"} ] },
+        "jsonParameters": true,
+        "optionsJson": "={}",
+        "bodyParametersJson": "={{$json[\"body\"]}}"
+      },
+      "id": "HTTP",
+      "name": "HTTP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [660, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "const cfg = $input.item.json.providerConfig; const res = items[0].json; let obj; if (cfg.type === 'openai.chat') { const text = res.choices?.[0]?.message?.content || '{}'; obj = JSON.parse(text); } else { const text = res.candidates?.[0]?.content?.parts?.[0]?.text || '{}'; obj = JSON.parse(text); } const { narration = '', hook = '', title = '' } = obj || {}; return [{ json: { script: { title, hook, narration } } }];"
+      },
+      "id": "Parse",
+      "name": "Parse JSON",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {},
+      "id": "Return",
+      "name": "Return",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 200]
+    }
+  ],
+  "connections": {
+    "Start": { "main": [[{ "node": "Build Request", "type": "main", "index": 0 }]] },
+    "Build Request": { "main": [[{ "node": "HTTP", "type": "main", "index": 0 }]] },
+    "HTTP": { "main": [[{ "node": "Parse", "type": "main", "index": 0 }]] },
+    "Parse": { "main": [[{ "node": "Return", "type": "main", "index": 0 }]] }
+  }
+}
+EOF

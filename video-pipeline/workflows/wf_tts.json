@@ -1,0 +1,51 @@
+cat > video-pipeline/workflows/wf_tts.json <<'EOF'
+{
+  "name": "wf_tts",
+  "nodes": [
+    { "parameters": {}, "id": "Start", "name": "Start", "type": "n8n-nodes-base.start", "typeVersion": 1, "position": [200, 200] },
+    {
+      "parameters": {
+        "functionCode": "const { providerConfig, text, voice, format } = items[0].json; let url, headers, body, responseFormat = 'b64';\nif (providerConfig.type === 'kokoro') {\n  url = `${$env[providerConfig.baseUrlEnv]}/v1/audio/speech`;\n  headers = { 'Content-Type': 'application/json' };\n  body = { input: text, voice: voice || providerConfig.defaultVoice, format: format || providerConfig.format };\n} else if (providerConfig.type === 'openai.tts') {\n  url = `${providerConfig.baseUrl}/audio/speech`;\n  headers = { Authorization: `Bearer ${$env[providerConfig.apiKeyEnv]}`, 'Content-Type': 'application/json' };\n  body = { model: 'gpt-4o-mini-tts', input: text, voice: voice || providerConfig.voice, format: format || providerConfig.format };\n} else if (providerConfig.type === 'google.tts') {\n  url = `${providerConfig.baseUrl}/v1/text:synthesize?key=${$env[providerConfig.apiKeyEnv]}`;\n  headers = { 'Content-Type': 'application/json' };\n  body = { input: { text }, voice: { languageCode: 'pt-BR', name: voice || providerConfig.voice }, audioConfig: { audioEncoding: 'MP3' } };\n} else { throw new Error('TTS provider não suportado'); }\nreturn [{ json: { url, headers, body, providerType: providerConfig.type } }];"
+      },
+      "id": "Build",
+      "name": "Build",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [420, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{$json[\"url\"]}}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParametersUi": { "parameter": [ { "name": "Authorization", "value": "={{$json[\"headers\"][\"Authorization\"]}}"}, { "name": "Content-Type", "value": "={{$json[\"headers\"][\"Content-Type\"] || 'application/json'}}"} ] },
+        "jsonParameters": true,
+        "optionsJson": "={}",
+        "bodyParametersJson": "={{$json[\"body\"]}}"
+      },
+      "id": "HTTP",
+      "name": "HTTP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [660, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "const t = $input.item.json.providerType; const res = items[0].json; let b64;\nif (t === 'kokoro') { b64 = res.audio?.base64 || res.audio?.b64 || res.b64; }\nelse if (t === 'openai.tts') { b64 = res.audio || res.data; }\nelse if (t === 'google.tts') { b64 = res.audioContent; }\nif (!b64) throw new Error('Falha ao obter áudio base64');\nreturn [{ json: { audio: { base64: b64, format: 'mp3' } } }];"
+      },
+      "id": "Parse",
+      "name": "Parse",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [900, 200]
+    },
+    { "parameters": {}, "id": "Return", "name": "Return", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1, "position": [1120, 200] }
+  ],
+  "connections": {
+    "Start": { "main": [[{ "node": "Build", "type": "main", "index": 0 }]] },
+    "Build": { "main": [[{ "node": "HTTP", "type": "main", "index": 0 }]] },
+    "HTTP": { "main": [[{ "node": "Parse", "type": "main", "index": 0 }]] },
+    "Parse": { "main": [[{ "node": "Return", "type": "main", "index": 0 }]] }
+  }
+}
+EOF

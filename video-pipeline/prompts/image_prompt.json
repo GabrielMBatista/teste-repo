@@ -1,0 +1,27 @@
+{
+  "system": "Gere prompts de IMAGEM concisos para cada cena. Responda APENAS JSON.",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "items": {
+        "type": "array",
+        "items": { "type": "object",
+          "properties": {
+            "idx": { "type": "integer" },
+            "prompt": { "type": "string", "maxLength": 240 }
+          },
+          "required": ["idx","prompt"]
+        }
+      }
+    },
+    "required": ["items"]
+  },
+  "rules": [
+    "safe for work",
+    "family-friendly",
+    "sem textos sobrepostos",
+    "sem marcas d'água",
+    "coerente com o roteiro",
+    "iluminação cinematográfica"
+  ]
+}

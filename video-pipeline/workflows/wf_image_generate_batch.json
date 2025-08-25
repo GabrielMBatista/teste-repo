@@ -1,0 +1,51 @@
+cat > video-pipeline/workflows/wf_image_generate_batch.json <<'EOF'
+{
+  "name": "wf_image_generate_batch",
+  "nodes": [
+    { "parameters": {}, "id": "Start", "name": "Start", "type": "n8n-nodes-base.start", "typeVersion": 1, "position": [200, 200] },
+    {
+      "parameters": {
+        "functionCode": "const { providerConfig, prompts } = items[0].json; // prompts = [{idx, prompt}]\nfunction buildReq(p){\n  if (p.type === 'together.images') {\n    return ({ url: `${p.baseUrl}/images/generations`, headers: { Authorization: `Bearer ${$env[p.apiKeyEnv]}`, 'Content-Type': 'application/json' }, makeBody: (prompt) => ({ model: p.model, prompt, width: 1024, height: 1024 }) });\n  }\n  if (p.type === 'google.imagen') {\n    return ({ url: `${p.baseUrl}/v1beta/models/${p.model}:generateImages?key=${$env[p.apiKeyEnv]}`, headers: { 'Content-Type': 'application/json' }, makeBody: (prompt) => ({ prompt: { text: prompt } }) });\n  }\n  if (p.type === 'fal.sd') {\n    return ({ url: `${p.baseUrl}/api/v1/${p.model}`, headers: { Authorization: `Key ${$env[p.apiKeyEnv]}`, 'Content-Type': 'application/json' }, makeBody: (prompt) => ({ prompt }) });\n  }\n  throw new Error('Image provider não suportado');\n}\nconst req = buildReq(providerConfig);\nreturn prompts.map(it => ({ json: { idx: it.idx, prompt: it.prompt, url: req.url, headers: req.headers, body: req.makeBody(it.prompt), providerType: providerConfig.type } }));"
+      },
+      "id": "PrepareBatch",
+      "name": "Prepare Batch",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [420, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{$json[\"url\"]}}",
+        "options": {},
+        "sendHeaders": true,
+        "headerParametersUi": { "parameter": [ { "name": "Authorization", "value": "={{$json[\"headers\"][\"Authorization\"]}}"}, { "name": "Content-Type", "value": "={{$json[\"headers\"][\"Content-Type\"] || 'application/json'}}"} ] },
+        "jsonParameters": true,
+        "optionsJson": "={}",
+        "bodyParametersJson": "={{$json[\"body\"]}}"
+      },
+      "id": "HTTP",
+      "name": "HTTP (per item)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [660, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "const providerType = $input.item.json.providerType; const out = []; for (const it of items) { const j = it.json; let b64 = null; if (providerType === 'together.images') { b64 = j.data?.[0]?.b64_json || null; } else if (providerType === 'google.imagen') { b64 = j.images?.[0]?.data || null; } else if (providerType === 'fal.sd') { b64 = j.image?.base64 || j.output?.[0]?.content?.image?.base64 || null; } if (!b64) continue; out.push({ idx: it.binary?.idx || it.json.idx, b64 }); }\nreturn [{ json: { images: out } }];"
+      },
+      "id": "Parse",
+      "name": "Parse Images",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [900, 200]
+    },
+    { "parameters": {}, "id": "Return", "name": "Return", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1, "position": [1120, 200] }
+  ],
+  "connections": {
+    "Start": { "main": [[{ "node": "Prepare Batch", "type": "main", "index": 0 }]] },
+    "Prepare Batch": { "main": [[{ "node": "HTTP", "type": "main", "index": 0 }]] },
+    "HTTP": { "main": [[{ "node": "Parse", "type": "main", "index": 0 }]] },
+    "Parse": { "main": [[{ "node": "Return", "type": "main", "index": 0 }]] }
+  }
+}
+EOF

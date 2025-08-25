@@ -1,0 +1,118 @@
+cat > video-pipeline/workflows/wf_orchestrator.json <<'EOF'
+{
+  "name": "wf_orchestrator",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "video/run",
+        "options": { "responseData": "json", "responseCode": 200 }
+      },
+      "id": "Webhook",
+      "name": "Webhook (POST /video/run)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [160, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "const run = items[0].json; if (!run.providers) throw new Error('providers not found'); return [{ json: { run } }];"
+      },
+      "id": "Validate",
+      "name": "Validate run.json",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [360, 200]
+    },
+    {
+      "parameters": {
+        "workflowId": "wf_script_generate",
+        "jsonParameters": true,
+        "optionsJson": "={}",
+        "options": {},
+        "additionalFields": {},
+        "inputData": "={{ { providerKey: $json.run.providers.llm, providerConfig: $json.run.providerCatalog.llm?.[$json.run.providers.llm] || {}, topic: $json.run.metadata.topic, scriptPrompt: $json.run.prompts?.script || {} } }}"
+      },
+      "id": "CallScript",
+      "name": "Execute: wf_script_generate",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [580, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "const run = $json.run; const script = items[0].json.script; // transforma script -> prompts\nconst promptDef = run.prompts?.image || { schema: { properties: { items: {}}}, system: ''};\n// aqui você poderia chamar LLM para gerar prompts; por simplicidade, vamos quebrar em 4 cenas\nconst narration = script.narration || '';\nconst chunks = narration.split(/[.!?]/).filter(Boolean).slice(0,4);\nconst prompts = chunks.map((t, i) => ({ idx: i, prompt: (run.metadata.style ? run.metadata.style + ' — ' : '') + t.trim().slice(0, 240) }));\nreturn [{ json: { run, script, prompts } }];"
+      },
+      "id": "MakePrompts",
+      "name": "Make Prompts (simplificado)",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [820, 200]
+    },
+    {
+      "parameters": {
+        "workflowId": "wf_image_generate_batch",
+        "jsonParameters": true,
+        "optionsJson": "={}",
+        "options": {},
+        "additionalFields": {},
+        "inputData": "={{ { providerKey: $json.run.providers.image, providerConfig: $json.run.providerCatalog.image?.[$json.run.providers.image] || {}, prompts: $json.prompts } }}"
+      },
+      "id": "CallImages",
+      "name": "Execute: wf_image_generate_batch",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1060, 200]
+    },
+    {
+      "parameters": {
+        "workflowId": "wf_tts",
+        "jsonParameters": true,
+        "optionsJson": "={}",
+        "options": {},
+        "additionalFields": {},
+        "inputData": "={{ { providerKey: $json.run.providers.tts, providerConfig: $json.run.providerCatalog.tts?.[$json.run.providers.tts] || {}, text: $json.script.narration, voice: $json.run.tts?.voice, format: 'mp3' } }}"
+      },
+      "id": "CallTTS",
+      "name": "Execute: wf_tts",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1280, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { ok: true, artifacts: { script: $json.script, images: $json.images || items[0].json.images, audio: $json.audio || items[1]?.json?.audio }, providers: $json.run.providers } }];"
+      },
+      "id": "Pack",
+      "name": "Pack Result",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [1500, 200]
+    },
+    { "parameters": {}, "id": "Return", "name": "Return", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1, "position": [1720, 200] },
+    {
+      "parameters": {
+        "functionCode": "const run = $json.run; // Mescla providers.json dentro do run (providerCatalog)\n// Para simplificar, esperamos receber providerCatalog no body; mas se quiser, carregue via HTTP antes.\nif (!run.providerCatalog) throw new Error('run.providerCatalog ausente. Envie providers.json mesclado em run');\nreturn [{ json: { run } }];"
+      },
+      "id": "RequireCatalog",
+      "name": "Require Catalog",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [360, 360]
+    }
+  ],
+  "connections": {
+    "Webhook (POST /video/run)": {
+      "main": [
+        [{ "node": "Validate", "type": "main", "index": 0 }, { "node": "RequireCatalog", "type": "main", "index": 0 }]
+      ]
+    },
+    "Require Catalog": { "main": [[{ "node": "CallScript", "type": "main", "index": 0 }]] },
+    "Validate run.json": { "main": [[{ "node": "CallScript", "type": "main", "index": 0 }]] },
+    "Execute: wf_script_generate": { "main": [[{ "node": "Make Prompts (simplificado)", "type": "main", "index": 0 }]] },
+    "Make Prompts (simplificado)": { "main": [[{ "node": "Execute: wf_image_generate_batch", "type": "main", "index": 0 }]] },
+    "Execute: wf_image_generate_batch": { "main": [[{ "node": "Execute: wf_tts", "type": "main", "index": 0 }]] },
+    "Execute: wf_tts": { "main": [[{ "node": "Pack Result", "type": "main", "index": 0 }]] },
+    "Pack Result": { "main": [[{ "node": "Return", "type": "main", "index": 0 }]] }
+  }
+}
+EOF
