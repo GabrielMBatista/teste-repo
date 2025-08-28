@@ -1,0 +1,64 @@
+services:
+  n8n:
+    build: .
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - WEBHOOK_URL=http://host.docker.internal:5678
+      - N8N_DEFAULT_BINARY_DATA_MODE=filesystem
+      - N8N_USER_FOLDER=/home/node/.n8n
+      - N8N_DISABLE_PRODUCTION_MAIN_PACKAGE_INSTALLATION=true
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - N8N_ENCRYPTION_KEY=Gblxd91@
+    volumes:
+      - ./n8n-data:/home/node/.n8n
+      - ./youtubevideos:/tmp/youtubevideos
+    depends_on:
+      - kokoro
+
+    # Limites (Compose “puro”)
+    cpus: "2.0"             # até 2 CPUs
+    cpuset: "0-3"           # prende aos cores 0..3 (ajuste conforme seu host)
+    mem_limit: "2g"         # máximo 2 GB RAM
+    mem_reservation: "1g"   # reserva desejada
+    pids_limit: 512         # limite de processos
+    oom_kill_disable: false
+  # memswap_limit: "2g"   # opcional: bloqueia swap além de 2g
+
+  kokoro:
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:v0.2.2
+    container_name: kokoro
+    ports:
+      - "8880:8880"
+    restart: unless-stopped
+
+    # Limites (Compose “puro”)
+    cpus: "4.0"
+    cpuset: "4-11"          # separa de n8n para evitar disputa
+    mem_limit: "4g"
+    mem_reservation: "2g"
+    pids_limit: 1024
+    oom_kill_disable: false
+  # memswap_limit: "6g"
+
+  ginigen-veo3-free:
+    image: registry.hf.space/ginigen-veo3-free:latest
+    container_name: ginigen-veo3-free
+    ports:
+      - "7860:7860"
+    platform: linux/amd64
+    command: python app.py
+    stdin_open: true      
+    gpus: "all"
+    tty: true
+
+    # Limites (Compose “puro”)
+    cpus: "10.0"
+    cpuset: "12-19"
+    mem_limit: "8g"
+    mem_reservation: "4g"
+    pids_limit: 1024
+    oom_kill_disable: false
+    # memswap_limit: "8g"

@@ -1,0 +1,989 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 12 Publica o vídeo no Youtube",
+        "height": 80,
+        "width": 1300,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -33520,
+        0
+      ],
+      "typeVersion": 1,
+      "id": "beee7bfa-2cfe-4f3c-a020-aa9f6c4a7d80",
+      "name": "Sticky Note12"
+    },
+    {
+      "parameters": {
+        "modelName": "=models/gemini-2.0-flash\n",
+        "options": {
+          "maxOutputTokens": 2048,
+          "temperature": 0.4,
+          "topK": 32,
+          "topP": 1,
+          "safetySettings": {
+            "values": [
+              {
+                "category": "HARM_CATEGORY_HARASSMENT",
+                "threshold": "BLOCK_NONE"
+              },
+              {
+                "category": "HARM_CATEGORY_HATE_SPEECH",
+                "threshold": "BLOCK_NONE"
+              },
+              {
+                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT"
+              },
+              {
+                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+                "threshold": "BLOCK_NONE"
+              }
+            ]
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "position": [
+        -31952,
+        -352
+      ],
+      "name": "Google Gemini Chat Model3",
+      "id": "617bb2e3-ea1e-423f-9660-7ff8b76e3736",
+      "typeVersion": 1
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -28832,
+        -944
+      ],
+      "id": "418756e2-8635-4f87-9fcd-ae814347b599",
+      "name": "ACABOU"
+    },
+    {
+      "parameters": {
+        "name": "=thumbnail_final.jpg",
+        "driveId": {
+          "__rl": true,
+          "value": "={{ $item(\"0\").$node[\"DIRETÓRIO\"].json[\"diretorio_id\"] }}",
+          "mode": "id"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "root",
+          "cachedResultName": "/ (Root folder)"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -29120,
+        -1184
+      ],
+      "id": "132e6beb-19fa-441a-bdfe-ce006adbef3d",
+      "name": "Salva nova thumb no gdrive"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/upload/youtube/v3/thumbnails/set",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "videoId",
+              "value": "={{ $('Youtube - Envio do binário').item.json.id }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -29120,
+        -944
+      ],
+      "id": "f85400d4-3b19-4bdc-a3a5-09ae17954d50",
+      "name": "Atualiza no Youtube"
+    },
+    {
+      "parameters": {
+        "command": "={{ $json.ffmpeg_command }}"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -29632,
+        -944
+      ],
+      "id": "7f00e515-6c35-44b4-ad7c-83e86e580a55",
+      "name": "Adiciona texto na imagem"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Função que quebra o texto em linhas sem cortar palavras\nfunction quebrarTextoEmLinhas(texto, maxPorLinha) {\n  const palavras = texto.split(' ');\n  const linhas = [];\n  let linhaAtual = '';\n\n  for (const palavra of palavras) {\n    if ((linhaAtual + ' ' + palavra).trim().length > maxPorLinha) {\n      linhas.push(linhaAtual.trim());\n      linhaAtual = palavra;\n    } else {\n      linhaAtual += ' ' + palavra;\n    }\n  }\n\n  if (linhaAtual) {\n    linhas.push(linhaAtual.trim());\n  }\n\n  return linhas;\n}\n\nconst slug = $('DIRETÓRIO').first().json.diretorio_slug;\nconst textoTitulo = $('Faz o parser').first().json.texto;\n\nconst linhas = quebrarTextoEmLinhas(textoTitulo, 22);\nconst fonte = \"/tmp/youtubevideos/montserrat-black.ttf\";\n\nconst imagemEntrada = `/tmp/youtubevideos/${slug}/thumbnail.jpg`;\nconst imagemSaida = `/tmp/youtubevideos/${slug}/thumbnail_final.jpg`;\n\n// Altura base\nconst fontSize = textoTitulo.length > 50 ? 70 : 90;\nconst espacamento = Math.round(fontSize * 1.4); // 1.4x o tamanho da fonte\nconst alturaInicial = 400 - ((linhas.length - 1) * espacamento) / 2;\n\n// Monta todos os filtros drawtext para cada linha\nconst filtrosDrawtext = linhas.map((linha, i) => {\n  const texto = linha.replace(/'/g, \"\\\\'\").replace(/:/g, '\\\\:');\n  const y = alturaInicial + i * espacamento;\n\n  // Linha 2 (índice 1) em vermelho, as demais em amarelo\n  const cor = i === 1 ? '#FF0000' : '#FFFF00';\n\n  return `drawtext=text='${texto}':fontfile='${fonte}':fontcolor=${cor}:fontsize=${fontSize}:shadowcolor=black:shadowx=2:shadowy=2:x=(w-text_w)/2:y=${y}`;\n}).join(',');\n\n// Comando final\nconst comando = `ffmpeg -i \"${imagemEntrada}\" -vf \"${filtrosDrawtext}\" -y \"${imagemSaida}\"`;\n\nreturn [{\n  json: {\n    ffmpeg_command: comando\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -29840,
+        -944
+      ],
+      "id": "685434c8-918c-4047-9f0d-14200bbd66cc",
+      "name": "Texto para thumb"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/tmp/youtubevideos/{{ $item(\"0\").$node[\"DIRETÓRIO\"].json[\"diretorio_slug\"] }}/thumbnail.jpg",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        -30512,
+        -944
+      ],
+      "id": "d810ce07-0ce9-4523-9245-88bbd680ccf4",
+      "name": "Salva no /tmp/youtubevideos"
+    },
+    {
+      "parameters": {
+        "name": "=thumbnail.jpg",
+        "driveId": {
+          "__rl": true,
+          "value": "={{ $item(\"0\").$node[\"DIRETÓRIO\"].json[\"diretorio_id\"] }}",
+          "mode": "id"
+        },
+        "folderId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "root",
+          "cachedResultName": "/ (Root folder)"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -30512,
+        -1184
+      ],
+      "id": "ca5cccd9-592c-429c-92c7-c2ff6fe45f5f",
+      "name": "Salva Gdrive"
+    },
+    {
+      "parameters": {
+        "jsCode": "const corrigido = items.map(item => {\n  const corrigidoJSON = JSON.parse(item.json.output);\n  return corrigidoJSON;\n});\n\nreturn corrigido;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -31552,
+        -736
+      ],
+      "id": "27ba550c-4a6e-4cbc-a5aa-6039dc580309",
+      "name": "Faz o parser"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer r8_SUA_APIKEY"
+            },
+            {
+              "name": "Prefer",
+              "value": "wait"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -30400,
+        -592
+      ],
+      "id": "bc076ee4-d79e-4156-8f9d-73919f785a04",
+      "name": "Gera thumbnail",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const prompt = $input.first().json.prompt;\n\nreturn [\n  {\n    json: {\n      input: {\n        prompt: JSON.stringify(prompt),\n        go_fast: true,\n        megapixels: \"1\",\n        num_outputs: 1,\n        aspect_ratio: \"16:9\",\n        output_format: \"jpg\",\n        output_quality: 80,\n        num_inference_steps: 4,\n      }\n    }\n  }\n]\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -30608,
+        -720
+      ],
+      "id": "b7e5e602-3ad7-4cf8-a462-71ee0b832e3e",
+      "name": "JSON IMAGEM"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Generate a thumbnail image prompt based on the following psychological cosmic horror story:\n\n{{ $item(\"0\").$node[\"Remove caracteres especiais\"].json[\"roteiro\"] }}\n\nThe thumbnail must be eerie, mysterious, and visually stunning. Include no text in the image. Return a JSON with a prompt for image generation and a short, gripping phrase for overlay text.",
+        "options": {
+          "systemMessage": "=You are a professional AI visual artist specialized in designing cinematic, high-impact YouTube thumbnails for horror and sci-fi videos. Your goal is to generate visually compelling and mysterious prompts for image generation tools, based on story synopses provided by the user. The images must evoke curiosity, fear, or fascination, and reflect key moments, themes, or emotional beats from the story. Do not include any text in the image prompt itself. Also return a short, suspenseful phrase in {{ $item(\"0\").$node[\"SETUP\"].json[\"g_idioma\"] }} that could be used as an overlay text on the thumbnail to entice viewers to click.\n\nThe response must be a valid JSON in the format below:\n\n{\n  \"prompt\": \"A lone man standing in a dark observatory, staring up at a cosmic sky where stars form a grotesque, glowing alien face. The atmosphere is foggy, with unnatural greenish-blue tones. The town behind him is quiet and empty. The sky is distorted, with swirling constellations and strange celestial shadows. Cinematic horror lighting, photographic realism, unsettling sci-fi surrealism, cosmic dread.\",\n  \"texto\": \"They’re watching us from the stars...\"\n}\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [
+        -31952,
+        -640
+      ],
+      "id": "12e48819-8ba1-442a-bbb5-1b97b8108929",
+      "name": "Agente Thumbnail"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -31824,
+        -352
+      ],
+      "id": "572d7fa3-3617-46d1-a394-6cf9278f94af",
+      "name": "OpenAI Chat Model3"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $item(\"0\").$node[\"YOUTUBE - Solicitação de sessão de upload\"].json[\"headers\"][\"location\"] }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "youTubeOAuth2Api",
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -32416,
+        -192
+      ],
+      "id": "da940b4b-485c-4cc4-a474-0b039e0257ae",
+      "name": "Youtube - Envio do binário"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "youTubeOAuth2Api",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "snippet",
+              "value": "={{ $json.snippet }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ $json.status }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -32928,
+        -192
+      ],
+      "id": "e3d930fd-da65-4b2e-801b-3ed9d926a534",
+      "name": "YOUTUBE - Solicitação de sessão de upload"
+    },
+    {
+      "parameters": {
+        "fileSelector": "=/tmp/youtubevideos/{{ $item(\"0\").$node[\"DIRETÓRIO\"].json[\"diretorio_slug\"] }}/video_final_completo.mp4",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        -32672,
+        -192
+      ],
+      "id": "38274698-876a-4fa3-b79d-f24fa01f3b85",
+      "name": "Lê vídeo final"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"snippet\": {\n    \"title\": \"{{ $json.titulo }}\",\n    \"description\": \"{{ $json.descricao }}\",\n    \"categoryId\": \"22\"\n  },\n  \"status\": {\n    \"privacyStatus\": \"public\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -33168,
+        -192
+      ],
+      "id": "722aebef-21ac-410b-b3ae-1f2ee12098ee",
+      "name": "JSON PUBLICACAO"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/tmp/youtubevideos/montserrat-black.ttf",
+        "dataPropertyName": "=data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        -30048,
+        -944
+      ],
+      "id": "1a757a9f-c74d-485d-97e4-433dcadb2d33",
+      "name": "Salva a fonte"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "=1C5xI5mzAVRKsKupgRvvOqrjvGlvl3KNv",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -30240,
+        -944
+      ],
+      "id": "22555891-637e-44c6-afc2-c3e2e8696e98",
+      "name": "Faz o download da fonte ttf",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "fileSelector": "=/tmp/youtubevideos/{{ $item(\"0\").$node[\"DIRETÓRIO\"].json[\"diretorio_slug\"] }}/thumbnail_final.jpg",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        -29408,
+        -944
+      ],
+      "id": "f51c842d-8cf6-49fd-9e2a-598bb59b7d86",
+      "name": "pega nova thumb1"
+    },
+    {
+      "parameters": {
+        "content": "##  11 - Gera a thumbnail",
+        "height": 80,
+        "width": 3260,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -32160,
+        0
+      ],
+      "typeVersion": 1,
+      "id": "77e2195e-c853-4339-871c-f79b52998d34",
+      "name": "Sticky Note14"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -30800,
+        -912
+      ],
+      "id": "3658a253-f835-414f-bb72-ac97668c285a",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.output }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -31312,
+        -592
+      ],
+      "id": "5ee047c4-94e0-4488-8a3c-8b290cd32427",
+      "name": "Baixa a imagem"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.1,
+      "position": [
+        -31152,
+        -256
+      ],
+      "id": "092e55c7-7652-4fe7-b778-d018ebd18961",
+      "name": "Merge3"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.1,
+      "position": [
+        -31152,
+        -416
+      ],
+      "id": "559d0248-0aef-4f4a-9193-96358c7fa4b5",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "=succeeded",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "44d1de9b-5254-44c0-b8b7-190a1221561b"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "454c3820-7e0a-4bf2-bd41-4408651ad5f6",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "failed",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "160cb03c-dc45-4a89-add6-11299c60bb59",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "canceled",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "353ba927-d5f5-4308-9427-9583d62f2688",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "starting",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "25044cfc-1c72-450a-8302-fc06b6210c56",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "processing",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -31520,
+        -336
+      ],
+      "id": "9e961a38-3702-4fbf-a4f7-224908fa781e",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "url": "={{ $('Gera thumbnail').item.json.urls.get }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization\t",
+              "value": "Bearer SUA_APIKEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -30656,
+        -256
+      ],
+      "id": "25036c49-602b-4acd-b0f5-45df4e927022",
+      "name": "Pega status da imagem1"
+    },
+    {
+      "parameters": {
+        "amount": 1
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -30816,
+        -256
+      ],
+      "id": "e848c879-0510-4c90-b5c0-44d9334cd61b",
+      "name": "Wait",
+      "webhookId": "ab0280db-870b-444c-94dd-3c7a673f7dd5"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $item(\"0\").$node[\"SETUP\"].json[\"g_googledrive_planilha\"] }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "videos",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1wEO-DdbWQX31qwsX7CZb3QDNHqdndCq35nkjTiDcBWE/edit#gid=0"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "id",
+              "lookupValue": "={{ $item(\"0\").$node[\"SETUP\"].json[\"id\"] }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -33440,
+        -192
+      ],
+      "id": "1690b676-8523-48d1-8e79-952f558c597c",
+      "name": "Google Sheets"
+    }
+  ],
+  "connections": {
+    "Google Gemini Chat Model3": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente Thumbnail",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atualiza no Youtube": {
+      "main": [
+        [
+          {
+            "node": "ACABOU",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Adiciona texto na imagem": {
+      "main": [
+        [
+          {
+            "node": "pega nova thumb1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Texto para thumb": {
+      "main": [
+        [
+          {
+            "node": "Adiciona texto na imagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salva no /tmp/youtubevideos": {
+      "main": [
+        [
+          {
+            "node": "Faz o download da fonte ttf",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Faz o parser": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gera thumbnail": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JSON IMAGEM": {
+      "main": [
+        [
+          {
+            "node": "Gera thumbnail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente Thumbnail": {
+      "main": [
+        [
+          {
+            "node": "Faz o parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Youtube - Envio do binário": {
+      "main": [
+        [
+          {
+            "node": "Agente Thumbnail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YOUTUBE - Solicitação de sessão de upload": {
+      "main": [
+        [
+          {
+            "node": "Lê vídeo final",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lê vídeo final": {
+      "main": [
+        [
+          {
+            "node": "Youtube - Envio do binário",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JSON PUBLICACAO": {
+      "main": [
+        [
+          {
+            "node": "YOUTUBE - Solicitação de sessão de upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Salva a fonte": {
+      "main": [
+        [
+          {
+            "node": "Texto para thumb",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Faz o download da fonte ttf": {
+      "main": [
+        [
+          {
+            "node": "Salva a fonte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "pega nova thumb1": {
+      "main": [
+        [
+          {
+            "node": "Salva nova thumb no gdrive",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Atualiza no Youtube",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Salva Gdrive",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Salva no /tmp/youtubevideos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "JSON IMAGEM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Baixa a imagem": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge3": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Baixa a imagem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge3",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Pega status da imagem1": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Pega status da imagem1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "JSON PUBLICACAO",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0148a0d02f23b5108eef550424381aefa27f0eb9409f653075915b94003c3d8b"
+  }
+}

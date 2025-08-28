@@ -1,0 +1,32 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker
+*.log
+docker-compose.override.yml
+
+# Dados persistentes
+n8n-data/
+youtubevideos/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Outros
+.env
+*.pyc
+__pycache__/
+
+# Web build/static files
+*.html
+*.css
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+images/

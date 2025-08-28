@@ -1,0 +1,266 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.browseract.com/v2/workflow/run-task",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer app-ztLG4wQAOKmAsFp7RaeBFBoO"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "=workflow_id",
+              "value": "48934210181120846"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -48400,
+        -1440
+      ],
+      "id": "0965c291-d201-407c-9e5e-bceb1203adad",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "=id",
+        "options": {
+          "fileName": "=/tmp/youtubevideos/task.txt"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        -48240,
+        -1440
+      ],
+      "id": "5fa67046-933e-473b-80f5-2bbe466f7d46",
+      "name": "Convert to File"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.browseract.com/v2/workflow/get-task-status?task_id={{ $('HTTP Request').item.json.id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer app-ztLG4wQAOKmAsFp7RaeBFBoO"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -48048,
+        -1440
+      ],
+      "id": "8422c909-5439-4655-a3bc-67efe8d7c758",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c3542bbd-6ab0-4415-98d6-e8855188b58f",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "finished",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -47840,
+        -1440
+      ],
+      "id": "23654c42-b88a-4eb2-965a-57f43c5318fd",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "dataPropertyName": "=data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.xml",
+      "typeVersion": 1,
+      "position": [
+        -46784,
+        -1456
+      ],
+      "id": "05c3ca32-a797-49f6-8160-c3bf70f91eff",
+      "name": "XML"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.browseract.com/v2/workflow/get-task?task_id={{ $('HTTP Request').item.json.id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer app-ztLG4wQAOKmAsFp7RaeBFBoO"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -47600,
+        -1456
+      ],
+      "id": "6a7139b6-3137-43ec-ad5f-18fa81721d9f",
+      "name": "HTTP Request2"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.output.files[0] }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -47392,
+        -1456
+      ],
+      "id": "37f90630-f2e1-490e-9443-9ab6ddbdf954",
+      "name": "HTTP Request3"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        -47184,
+        -1456
+      ],
+      "id": "4e4cd0e8-f264-4224-b748-856874c21b54",
+      "name": "Extract from File"
+    }
+  ],
+  "connections": {
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Convert to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to File": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request3": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "XML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0148a0d02f23b5108eef550424381aefa27f0eb9409f653075915b94003c3d8b"
+  }
+}
