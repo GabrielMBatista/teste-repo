@@ -1,6 +1,6 @@
 services:
   n8n:
-    build: .
+    image: docker.n8n.io/n8nio/n8n:latest
     container_name: n8n
     restart: unless-stopped
     ports:
@@ -11,54 +11,101 @@ services:
       - N8N_USER_FOLDER=/home/node/.n8n
       - N8N_DISABLE_PRODUCTION_MAIN_PACKAGE_INSTALLATION=true
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      # >>> ideal mover p/ .env
       - N8N_ENCRYPTION_KEY=Gblxd91@
     volumes:
       - ./n8n-data:/home/node/.n8n
       - ./youtubevideos:/tmp/youtubevideos
     depends_on:
       - kokoro
-
     # Limites (Compose “puro”)
-    cpus: "2.0"             # até 2 CPUs
-    cpuset: "0-3"           # prende aos cores 0..3 (ajuste conforme seu host)
-    mem_limit: "2g"         # máximo 2 GB RAM
-    mem_reservation: "1g"   # reserva desejada
-    pids_limit: 512         # limite de processos
+    cpus: "2.0"            # até 2 CPUs
+    cpuset: "0-3"          # prende aos cores 0..3 (ajuste pro seu host)
+    mem_limit: "2g"        # máximo 2 GB RAM
+    mem_reservation: "1g"  # reserva desejada
+    pids_limit: 512        # limite de processos
     oom_kill_disable: false
-  # memswap_limit: "2g"   # opcional: bloqueia swap além de 2g
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5678/healthz"]  # n8n >=1.100 tem /healthz; senão troque por /
+      interval: 30s
+      timeout: 5s
+      retries: 5
 
   kokoro:
     image: ghcr.io/remsky/kokoro-fastapi-cpu:v0.2.2
     container_name: kokoro
+    restart: unless-stopped
     ports:
       - "8880:8880"
-    restart: unless-stopped
-
     # Limites (Compose “puro”)
     cpus: "4.0"
-    cpuset: "4-11"          # separa de n8n para evitar disputa
+    cpuset: "4-11"         # separa de n8n para evitar disputa
     mem_limit: "4g"
     mem_reservation: "2g"
     pids_limit: 1024
     oom_kill_disable: false
-  # memswap_limit: "6g"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8880/"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
 
-  ginigen-veo3-free:
-    image: registry.hf.space/ginigen-veo3-free:latest
-    container_name: ginigen-veo3-free
+  zerogpu-wan2-free:
+    image: registry.hf.space/zerogpu-aoti-wan2-2-fp8da-aoti-faster:latest
+    container_name: zerogpu-wan2-free
+    platform: linux/amd64
     ports:
       - "7860:7860"
-    platform: linux/amd64
-    command: python app.py
-    stdin_open: true      
-    gpus: "all"
-    tty: true
+    command: python app.py              # mantém o app original do Space
+    environment:
+      # GPU
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      # --- Cache e performance HF/Diffusers ---
+      - HF_HOME=/tmp/huggingface
+      - HF_HUB_CACHE=/tmp/huggingface/hub
+      - HUGGINGFACE_HUB_CACHE=/tmp/huggingface/hub
+      - TRANSFORMERS_CACHE=/tmp/huggingface/transformers
+      - HF_DATASETS_CACHE=/tmp/huggingface/datasets
+      - HF_HUB_ENABLE_HF_TRANSFER=1     # download mais rápido
+      - HF_HUB_DISABLE_TELEMETRY=1
+      - DIFFUSERS_NO_WARMUP=1           # evita warmup pesado de memória
+      # --- CUDA/PyTorch: fragmentação e picos ---
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:64,garbage_collection_threshold:0.6
 
-    # Limites (Compose “puro”)
-    cpus: "10.0"
-    cpuset: "12-19"
-    mem_limit: "8g"
-    mem_reservation: "4g"
-    pids_limit: 1024
-    oom_kill_disable: false
-    # memswap_limit: "8g"
+      # (opcionais; só têm efeito se o app do Space ler)
+      - WAN_CPU_MAX_GB=10               # teto de RAM p/ offload (se suportado)
+      - WAN_GPU_MAX_GB=10               # teto de VRAM p/ balanceamento (se suportado)
+    volumes:
+      - ./huggingface-cache:/tmp/huggingface   # cache persistente fora do /tmp do container
+    # Limites de recursos do container (evita o PC ficar em 95% de RAM)
+    mem_limit: "10g"                    # ajuste conforme sua folga (ex.: "10g"–"14g")
+    shm_size: "2g"
+    gpus: "all"
+    # (opcional) melhorar pinned memory
+    ulimits:
+      memlock: -1
+      stack: 67108864
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/"]
+      interval: 45s
+      timeout: 7s
+      retries: 5
+    restart: unless-stopped
+      
+  n8n-mcp:
+    image: ghcr.io/czlonkowski/n8n-mcp:latest
+    container_name: n8n-mcp
+    restart: unless-stopped
+    # Para ativar acesso HTTP ao MCP, descomente a linha abaixo:
+    # ports:
+    #   - "7000:7000"
+    environment:
+      - MCP_MODE=stdio
+      - LOG_LEVEL=error
+      - DISABLE_CONSOLE_OUTPUT=true
+      - N8N_API_URL=http://n8n:5678      # aponta para o container n8n
+      - N8N_API_KEY=${N8N_API_KEY}       # coloque no .env
+    depends_on:
+      - n8n

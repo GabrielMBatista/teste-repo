@@ -11,6 +11,9 @@ docker-compose.override.yml
 # Dados persistentes
 n8n-data/
 youtubevideos/
+huggingface-cache/
+wan-gguf-models/
+wan-gguf-app/
 
 # Sistema
 .DS_Store

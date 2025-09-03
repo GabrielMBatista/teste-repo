@@ -1,0 +1,661 @@
+{
+  "name": "Postagem Automática Social Media",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */30 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "Cron Trigger - A cada 30min",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  id,\n  platform,\n  access_token,\n  refresh_token,\n  account_name,\n  is_active,\n  last_post_at\nFROM social_accounts \nWHERE is_active = true",
+        "additionalFields": {}
+      },
+      "id": "get-accounts",
+      "name": "Buscar Contas Ativas",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        460,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{ $env.SUPABASE_POSTGRES_CREDENTIAL_ID }}",
+          "name": "Supabase Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-accounts",
+              "leftValue": "={{ $json.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-has-accounts",
+      "name": "Tem Contas?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "split-accounts",
+      "name": "Dividir por Conta",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  c.id,\n  c.title,\n  c.description,\n  c.media_url,\n  c.media_type,\n  c.scheduled_for,\n  c.tags,\n  c.account_id\nFROM content c\nWHERE c.account_id = {{ $json.id }}\n  AND c.status = 'ready'\n  AND c.scheduled_for <= NOW()\n  AND c.posted_at IS NULL\nORDER BY c.scheduled_for ASC\nLIMIT 1",
+        "additionalFields": {}
+      },
+      "id": "get-content",
+      "name": "Buscar Conteúdo Disponível",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        1120,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{ $env.SUPABASE_POSTGRES_CREDENTIAL_ID }}",
+          "name": "Supabase Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-content",
+              "leftValue": "={{ $json.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-has-content",
+      "name": "Tem Conteúdo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combinar dados da conta com o conteúdo\nconst accountData = $node[\"Dividir por Conta\"].json;\nconst contentData = $json[0] || null;\n\nif (!contentData) {\n  return [];\n}\n\nreturn [{\n  // Dados da conta\n  accountId: accountData.id,\n  platform: accountData.platform,\n  accessToken: accountData.access_token,\n  refreshToken: accountData.refresh_token,\n  accountName: accountData.account_name,\n  \n  // Dados do conteúdo\n  contentId: contentData.id,\n  title: contentData.title,\n  description: contentData.description,\n  mediaUrl: contentData.media_url,\n  mediaType: contentData.media_type,\n  tags: contentData.tags,\n  scheduledFor: contentData.scheduled_for\n}];"
+      },
+      "id": "prepare-post-data",
+      "name": "Preparar Dados do Post",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-youtube",
+              "leftValue": "={{ $json.platform }}",
+              "rightValue": "youtube",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route-youtube",
+      "name": "É YouTube?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-instagram",
+              "leftValue": "={{ $json.platform }}",
+              "rightValue": "instagram",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route-instagram",
+      "name": "É Instagram?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-tiktok",
+              "leftValue": "={{ $json.platform }}",
+              "rightValue": "tiktok",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route-tiktok",
+      "name": "É TikTok?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.googleapis.com/upload/youtube/v3/videos",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "youTubeOAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $json.accessToken }}"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "snippet,status"
+            },
+            {
+              "name": "uploadType",
+              "value": "multipart"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "snippet",
+              "value": "={{ JSON.stringify({ title: $json.title, description: $json.description, tags: $json.tags?.split(',') || [] }) }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ JSON.stringify({ privacyStatus: 'public' }) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "post-youtube",
+      "name": "Postar no YouTube",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2000,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{ $env.INSTAGRAM_BUSINESS_ACCOUNT_ID }}/media",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $json.accessToken }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({\n  image_url: $json.mediaUrl,\n  caption: `${$json.title}\\n\\n${$json.description}\\n\\n${$json.tags || ''}`,\n  access_token: $json.accessToken\n}) }}",
+        "options": {}
+      },
+      "id": "create-instagram-media",
+      "name": "Criar Media Instagram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2000,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://graph.facebook.com/v18.0/{{ $env.INSTAGRAM_BUSINESS_ACCOUNT_ID }}/media_publish",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $json.accessToken }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({\n  creation_id: $json.id,\n  access_token: $json.accessToken\n}) }}",
+        "options": {}
+      },
+      "id": "publish-instagram",
+      "name": "Publicar Instagram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2220,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://open-api.tiktok.com/share/video/upload/",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $json.accessToken }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({\n  video: {\n    video_url: $json.mediaUrl\n  },\n  post_info: {\n    title: $json.title,\n    description: $json.description,\n    privacy_level: \"EVERYONE\",\n    disable_duet: false,\n    disable_comment: false,\n    disable_stitch: false,\n    video_cover_timestamp_ms: 1000\n  },\n  source_info: {\n    source: \"PULL_FROM_URL\",\n    video_url: $json.mediaUrl\n  }\n}) }}",
+        "options": {}
+      },
+      "id": "post-tiktok",
+      "name": "Postar no TikTok",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2000,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE content \nSET \n  status = 'posted',\n  posted_at = NOW(),\n  post_response = {{ JSON.stringify($json) }}\nWHERE id = {{ $node[\"Preparar Dados do Post\"].json.contentId }}",
+        "additionalFields": {}
+      },
+      "id": "update-posted-content",
+      "name": "Marcar como Postado",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        2440,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{ $env.SUPABASE_POSTGRES_CREDENTIAL_ID }}",
+          "name": "Supabase Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE social_accounts \nSET last_post_at = NOW() \nWHERE id = {{ $node[\"Preparar Dados do Post\"].json.accountId }}",
+        "additionalFields": {}
+      },
+      "id": "update-account-last-post",
+      "name": "Atualizar Última Postagem",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        2660,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{ $env.SUPABASE_POSTGRES_CREDENTIAL_ID }}",
+          "name": "Supabase Database"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log de erro detalhado\nconst error = $input.all()[0];\nconst nodeData = $node[\"Preparar Dados do Post\"]?.json;\n\nconsole.error('Erro ao postar:', {\n  error: error,\n  contentId: nodeData?.contentId,\n  platform: nodeData?.platform,\n  accountId: nodeData?.accountId,\n  timestamp: new Date().toISOString()\n});\n\n// Marcar conteúdo com erro\nreturn [{\n  contentId: nodeData?.contentId,\n  error: JSON.stringify(error),\n  platform: nodeData?.platform\n}];"
+      },
+      "id": "handle-error",
+      "name": "Tratar Erro",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2440,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE content \nSET \n  status = 'error',\n  error_message = {{ JSON.stringify($json.error) }}\nWHERE id = {{ $json.contentId }}",
+        "additionalFields": {}
+      },
+      "id": "update-error-content",
+      "name": "Marcar Erro no Conteúdo",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        2660,
+        500
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "{{ $env.SUPABASE_POSTGRES_CREDENTIAL_ID }}",
+          "name": "Supabase Database"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Cron Trigger - A cada 30min": {
+      "main": [
+        [
+          {
+            "node": "Buscar Contas Ativas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Contas Ativas": {
+      "main": [
+        [
+          {
+            "node": "Tem Contas?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem Contas?": {
+      "main": [
+        [
+          {
+            "node": "Dividir por Conta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dividir por Conta": {
+      "main": [
+        [
+          {
+            "node": "Buscar Conteúdo Disponível",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Conteúdo Disponível": {
+      "main": [
+        [
+          {
+            "node": "Tem Conteúdo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem Conteúdo?": {
+      "main": [
+        [
+          {
+            "node": "Preparar Dados do Post",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Dados do Post": {
+      "main": [
+        [
+          {
+            "node": "É YouTube?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "É Instagram?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "É TikTok?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É YouTube?": {
+      "main": [
+        [
+          {
+            "node": "Postar no YouTube",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É Instagram?": {
+      "main": [
+        [
+          {
+            "node": "Criar Media Instagram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É TikTok?": {
+      "main": [
+        [
+          {
+            "node": "Postar no TikTok",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postar no YouTube": {
+      "main": [
+        [
+          {
+            "node": "Marcar como Postado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Criar Media Instagram": {
+      "main": [
+        [
+          {
+            "node": "Publicar Instagram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publicar Instagram": {
+      "main": [
+        [
+          {
+            "node": "Marcar como Postado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postar no TikTok": {
+      "main": [
+        [
+          {
+            "node": "Marcar como Postado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar como Postado": {
+      "main": [
+        [
+          {
+            "node": "Atualizar Última Postagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tratar Erro": {
+      "main": [
+        [
+          {
+            "node": "Marcar Erro no Conteúdo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "local"
+  },
+  "id": "social-media-automation",
+  "tags": []
+}
