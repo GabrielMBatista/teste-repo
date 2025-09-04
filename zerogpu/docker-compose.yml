@@ -1,0 +1,52 @@
+services:
+  wan2-model:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+    ports:
+      - "7860:7860"
+    platform: linux/amd64
+    volumes:
+      # Montar diretório principal onde ficam modelos e dados
+      - /mnt/e/Docker/wan:/tmp/models
+      # Cache do Hugging Face para modelos baixados
+      - /mnt/e/Docker/wan/huggingface_cache:/root/.cache/huggingface
+      # Cache do PyTorch
+      - /mnt/e/Docker/wan/torch_cache:/root/.cache/torch
+      # Cache do pip
+      - /mnt/e/Docker/wan/pip_cache:/root/.cache/pip
+      # Diretório temporário para arquivos grandes
+      - /mnt/e/Docker/wan/tmp:/tmp/cache
+      # Adicionar cache adicional para downloads diretos
+      - /mnt/e/Docker/wan/transformers_cache:/root/.cache/transformers
+    environment:
+      - MODEL_PATH=/tmp/models
+      # Configurar caches para usar disco local
+      - HF_HOME=/root/.cache/huggingface
+      - TORCH_HOME=/root/.cache/torch
+      - PIP_CACHE_DIR=/root/.cache/pip
+      - TMPDIR=/tmp/cache
+      # Remover limite baixo de memória GPU que estava causando fragmentação
+      # - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512  # REMOVIDO
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:2048,garbage_collection_threshold:0.6
+      - CUDA_LAUNCH_BLOCKING=1
+      # Configurar GPU para Docker Desktop
+      - NVIDIA_VISIBLE_DEVICES=0
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - HF_DATASETS_CACHE=/root/.cache/huggingface
+      - TRANSFORMERS_CACHE=/root/.cache/transformers
+      - HUGGINGFACE_HUB_CACHE=/root/.cache/huggingface
+      - XDG_CACHE_HOME=/root/.cache
+    shm_size: '8gb'
+    # Usar apenas uma das configurações de GPU
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+    restart: "no"
+
+volumes:
+  model-cache:

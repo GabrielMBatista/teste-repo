@@ -1,0 +1,23 @@
+FROM registry.hf.space/zerogpu-aoti-wan2-2-fp8da-aoti-faster:latest
+
+# Criar diretório para modelos em local com permissão
+RUN mkdir -p /tmp/models
+
+# Copiar nosso app.py customizado e o optimization.py original
+COPY app.py /home/user/app/app.py
+COPY optimization.py /home/user/app/optimization.py
+
+# Copiar script de verificação de GPU
+COPY check_gpu.py /home/user/app/check_gpu.py
+
+# Ajustar variáveis de ambiente para usar modelos externos
+ENV MODEL_PATH=/tmp/models
+ENV PYTHONPATH=/home/user/app:$PYTHONPATH
+
+# Definir diretório de trabalho onde está o app.py
+WORKDIR /home/user/app
+
+EXPOSE 7860
+
+# Não parar execução se GPU não for detectada no check
+CMD ["sh", "-c", "python check_gpu.py || echo 'GPU check failed, continuing...' && python app.py"]
