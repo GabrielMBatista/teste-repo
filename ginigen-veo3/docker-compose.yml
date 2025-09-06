@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  ginigen-veo3:
+    image: registry.hf.space/ginigen-veo3-free:latest
+    container_name: ginigen-veo3
+    platform: linux/amd64
+    ports:
+      - "7860:7860"
+    shm_size: '8gb'
+    volumes:
+      # Cache do Hugging Face para modelos baixados
+      - /mnt/e/Docker/ginigen/cache:/tmp/cache/huggingface
+      # Cache do PyTorch
+      - /mnt/e/Docker/ginigen/torch_cache:/tmp/cache/torch
+      # Cache do pip
+      - /mnt/e/Docker/ginigen/pip_cache:/root/.cache/pip
+      # Cache do Transformers
+      - /mnt/e/Docker/ginigen/transformers_cache:/tmp/cache/transformers
+      # Diretório para modelos grandes
+      - /mnt/e/Docker/ginigen/models:/tmp/models
+      # Diretório temporário para arquivos grandes
+      - /mnt/e/Docker/ginigen/tmp:/tmp/cache
+      # App customizado
+      - "./app.py:/home/user/app/app.py"
+    environment:
+      # Configurar caches para usar disco local
+      - HF_HOME=/tmp/cache/huggingface
+      - TORCH_HOME=/tmp/cache/torch
+      - PIP_CACHE_DIR=/root/.cache/pip
+      - TRANSFORMERS_CACHE=/tmp/cache/transformers
+      - HF_HUB_CACHE=/tmp/cache/huggingface
+      - HUGGINGFACE_HUB_CACHE=/tmp/cache/huggingface
+      - HF_DATASETS_CACHE=/tmp/cache/huggingface
+      - XDG_CACHE_HOME=/tmp/cache
+      - TMPDIR=/tmp/cache
+      - CACHE_DIR=/tmp/cache
+      # GPU e memória - ULTRA CONSERVADOR para 14B model
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512,garbage_collection_threshold:0.6,expandable_segments:True
+      - CUDA_LAUNCH_BLOCKING=0
+      - NVIDIA_VISIBLE_DEVICES=0
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - TORCH_CUDNN_V8_API_ENABLED=1
+      - TORCH_BACKENDS_CUDNN_BENCHMARK=0  # Desabilitado para economizar memória
+      - CUDA_DEVICE_MAX_CONNECTIONS=1
+      # Configurações para modelo grande
+      - PYTORCH_JIT=0
+      - PYTORCH_TENSOREXPR_FALLBACK=1
+      - CUDA_CACHE_DISABLE=0
+      - PYTORCH_CUDA_PREFER_MEMORY_EFFICIENT=1
+    command: python app.py
+    working_dir: /home/user/app
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+    restart: "no"
